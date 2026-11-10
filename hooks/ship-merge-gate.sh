@@ -1,31 +1,32 @@
 #!/usr/bin/env bash
-# Refuses `gh pr merge` unless verify, simplify and review each left a marker
-# for the PR's head commit: $(git rev-parse --git-common-dir)/ship/<sha>.{verified,simplified,reviewed}.
-# The SHA is the PR's headRefOid when the command names a PR (number or URL), so a
-# merge of a worktree's PR from the main checkout checks the right commit;
-# with no PR named it is the checkout's HEAD. A new commit changes the SHA, so old
-# markers stop counting.
+# PreToolUse hook for shell commands (Claude Code and Codex CLI share the contract).
+# Refuses `gh pr merge` unless the command pins the commit it merges with
+# --match-head-commit <40-char sha> and simplify, verify and review each left a marker
+# for that commit: $(git rev-parse --git-common-dir)/ship/<sha>.{simplified,verified,reviewed}.
+# gh itself refuses the merge when the PR head is no longer that commit, so the hook never
+# has to work out which PR or repository the command means. A new commit has a new SHA
+# and no markers.
+# Auto-merge is refused: it can land a later push that never passed the gates.
 # Deliberate bypass, visible in the transcript: prefix the command with SHIP_GATE=off.
-# Known limit: the PR number is the first bare number or /pull/N after `merge`; a number
-# inside a flag value (--subject "fix 3") is misread, and the wrong SHA is refused (safe side).
-command -v jq >/dev/null || exit 0
+# Known limits: a command line holding two merges is checked once, and text that merely
+# mentions "gh ... pr merge" is treated as a merge (refused, the safe side).
 INPUT=$(cat)
-CMD=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
-# gh in command position: line start or after ; & | ( , optionally behind rtk or VAR=val
-grep -qE '(^|[;&|(])[[:space:]]*(rtk[[:space:]]+)?([A-Za-z_]+=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+pr[[:space:]]+merge' <<<"$CMD" || exit 0
-grep -qE '(^|[[:space:];&|])SHIP_GATE=off[[:space:]]' <<<"$CMD" && exit 0
-DIR=$(jq -r '.cwd // empty' <<<"$INPUT"); DIR=${DIR:-$PWD}
-deny() { jq -n --arg r "$1" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'; exit 0; }
-GD=$(git -C "$DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || deny "ship merge gate: $DIR is not a git checkout, so no markers can be checked. Run the merge from a checkout of the repo, or prefix SHIP_GATE=off if this merge is outside /ship."
-REST=$(grep -oE 'gh[[:space:]]+pr[[:space:]]+merge[^;&|]*' <<<"$CMD" | head -1)
-PR=$(grep -oE '(^|[[:space:]]|/pull/)[0-9]+([[:space:]]|$)' <<<"${REST#*merge}" | head -1 | tr -dc 0-9)
-if [ -n "$PR" ]; then
-  SHA=$(cd "$DIR" && gh pr view "$PR" --json headRefOid -q .headRefOid 2>&1) || deny "ship merge gate: could not read PR #$PR's head commit (gh: $SHA). Check gh auth and the PR number, or prefix SHIP_GATE=off if this merge is outside /ship."
-else
-  SHA=$(git -C "$DIR" rev-parse HEAD)
+MERGE_RE='(^|[^[:alnum:]_-])gh([[:space:]]+[^;&|]*)?[[:space:]]+pr[[:space:]]+merge([^[:alnum:]_-]|$)'
+if ! command -v jq >/dev/null; then
+  grep -qE "$MERGE_RE" <<<"$INPUT" || exit 0
+  echo "ship merge gate: jq is not installed, so this merge cannot be checked. Install jq, or prefix SHIP_GATE=off for a merge outside ship." >&2
+  exit 2
 fi
+CMD=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
+grep -qE "$MERGE_RE" <<<"$CMD" || exit 0
+grep -qE '(^|[[:space:];&|])SHIP_GATE=off[[:space:]]' <<<"$CMD" && exit 0
+deny() { jq -n --arg r "ship merge gate: $1 Prefix SHIP_GATE=off only for a merge that is not going through ship." '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'; exit 0; }
+grep -qE '[[:space:]]--auto([[:space:]=]|$)' <<<"$CMD" && deny "auto-merge can land a later commit that never passed the gates. Wait for the checks, then merge with --match-head-commit <sha>."
+SHA=$(grep -oE -- '--match-head-commit[=[:space:]]+"?[0-9a-f]{40}' <<<"$CMD" | head -1 | grep -oE '[0-9a-f]{40}$')
+[ -n "$SHA" ] || deny "the merge must pin its commit: add --match-head-commit followed by the literal 40-character SHA the gates passed on (not a \$(...) substitution, which the hook cannot read)."
+DIR=$(jq -r '.cwd // empty' <<<"$INPUT"); DIR=${DIR:-$PWD}
+GD=$(git -C "$DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || deny "$DIR is not a git checkout, so no markers can be checked. Run the merge from the checkout the gates ran in."
 MISSING=""
-for g in verified simplified reviewed; do [ -e "$GD/ship/$SHA.$g" ] || MISSING="$MISSING $g"; done
+for g in simplified verified reviewed; do [ -e "$GD/ship/$SHA.$g" ] || MISSING="$MISSING $g"; done
 [ -z "$MISSING" ] && exit 0
-WHAT=HEAD; [ -n "$PR" ] && WHAT="PR #$PR head"
-deny "ship merge gate: $WHAT ${SHA:0:12} has no marker for:$MISSING. Re-run those gates on this commit; each writes \$(git rev-parse --git-common-dir)/ship/<sha>.<gate> when it ends green (ship, Merge markers). Prefix SHIP_GATE=off only for a merge that is not going through /ship."
+deny "commit ${SHA:0:12} has no marker for:$MISSING. Re-run those gates on this commit; each writes \$(git rev-parse --git-common-dir)/ship/<sha>.<gate> when it ends green (ship, Merge markers)."

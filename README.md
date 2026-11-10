@@ -15,12 +15,13 @@ codex/
   skills/               # the same seven, adapted for Codex, plus code-review and security-review
 hooks/
   ship-merge-gate.sh    # blocks `gh pr merge` until the gates passed
+  test-merge-gate.sh    # table test for the hook
   claude-settings.snippet.json
   codex-hooks.json
 install.sh              # ./install.sh claude | codex
 ```
 
-The Codex version has no `/coach` command or subagents. It carries its own `code-review` and `security-review` skills, because Codex has no built-in equivalents of the ones Claude Code ships, and its `ship` adds a security gate.
+The Codex version has no `/coach` command or subagents. It carries its own `code-review` and `security-review` skills, because Codex has no built-in equivalents of the ones Claude Code ships, and its `ship` adds a security gate. The Claude version of `ship` has no security gate of its own yet; run Claude Code's `/security-review` yourself on a security-sensitive diff.
 
 ## Philosophy
 
@@ -44,7 +45,7 @@ cd coach-ship-skills
 ./install.sh codex     # into ~/.codex  (or $CODEX_HOME)
 ```
 
-The installer replaces the matching skill directories, copies the merge-gate hook, and tells you how to register it:
+The installer replaces the matching skill directories (a skill of the same name that you already had is moved to a dated `skills-backup-*` folder, not deleted), copies the merge-gate hook, and tells you how to register it:
 
 - **Claude Code:** add the `PreToolUse` entry from `hooks/claude-settings.snippet.json` to `~/.claude/settings.json`, then start a new session.
 - **Codex:** the installer writes `~/.codex/hooks.json` if you have none (otherwise merge `hooks/codex-hooks.json` by hand, using the full path to the installed script as the command). Start Codex, run `/hooks`, and trust the new hook; Codex skips a hook until you do. Use Codex CLI 0.166.0 or later, where the hook is told the directory the command really runs in.
@@ -92,7 +93,7 @@ Inside Claude Code:
 10. Merged or blocked honestly.
 11. Cleaned up: branch, worktrees, strays, and follow-up issues.
 
-`simplify`, `verify`, and independent review each leave a marker file for the commit they passed on, and the merge-gate hook refuses `gh pr merge` when the PR's head commit lacks one. A fix after review is a new commit with no markers, so it goes back through the gates.
+`simplify`, `verify`, and independent review each leave a marker file for the commit they passed on. The merge-gate hook refuses `gh pr merge` unless the command pins that commit with `--match-head-commit <sha>` and the commit has all three markers, and it refuses `--auto`, since auto-merge can land a later push. A fix after review is a new commit with no markers, so it goes back through the gates. `hooks/test-merge-gate.sh` runs the hook against a table of commands.
 
 ## Recommended companion tooling
 

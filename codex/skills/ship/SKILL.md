@@ -25,7 +25,7 @@ These are preconditions, not a checklist. If any is unmet, achieving it becomes 
 10. **Merged or blocked honestly.** The `babysit` skill owns the final loop until merged or a real blocker is reported. **See Repo overrides: a repo that never self-merges changes this invariant.**
 11. **Cleaned up.** After a merge (or a terminal handoff), no debris is left behind. See **Cleanup** below. This invariant only comes due once the diff has landed or ship has stopped; a blocked ship reports what it *would* clean, then stops.
 
-**Merge markers.** A user-level PreToolUse hook (`~/.codex/hooks/ship-merge-gate.sh`, registered in `~/.codex/hooks.json`) refuses `gh pr merge` unless the checkout's HEAD has all three markers. Write each one the moment its gate ends green on the current HEAD, never before and never from memory:
+**Merge markers.** A user-level PreToolUse hook (`~/.codex/hooks/ship-merge-gate.sh`, registered in `~/.codex/hooks.json`) refuses `gh pr merge` unless the command pins its commit with `--match-head-commit <sha>` and that commit has all three markers. It also refuses `--auto`, because auto-merge can land a later push that never passed the gates. Write each one the moment its gate ends green on the current HEAD, never before and never from memory:
 
 ```bash
 m="$(git rev-parse --path-format=absolute --git-common-dir)/ship"; mkdir -p "$m"

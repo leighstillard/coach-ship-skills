@@ -18,8 +18,14 @@ install_file() {
 }
 
 # Replaces the whole skill directory, so a file removed upstream does not linger.
+# An existing directory of the same name is moved aside first, never deleted: it may
+# be the user's own skill.
+BACKUP="$DEST/skills-backup-$(date +%Y%m%d-%H%M%S)"
 install_dir() {
-  rm -rf "$2"
+  if [ -e "$2" ]; then
+    mkdir -p "$BACKUP"
+    mv "$2" "$BACKUP/"
+  fi
   mkdir -p "$(dirname "$2")"
   cp -R "$1" "$2"
   printf 'installed %s\n' "$2"
@@ -40,6 +46,8 @@ install_file "$REPO_ROOT/hooks/ship-merge-gate.sh" "$DEST/hooks/ship-merge-gate.
 chmod +x "$DEST/hooks/ship-merge-gate.sh"
 
 echo
+[ -d "$BACKUP" ] && echo "Previous copies of the replaced skills were moved to $BACKUP. Delete it once you have checked nothing of yours was in there."
+command -v jq >/dev/null || echo "WARNING: jq is not installed. The merge gate blocks every gh pr merge until it is."
 if [ "$AGENT" = codex ]; then
   if [ ! -e "$DEST/hooks.json" ]; then
     # The shipped config names $HOME/.codex; write the directory actually installed into.

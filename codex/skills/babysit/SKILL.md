@@ -49,7 +49,7 @@ The status rollup mixes check runs (`name/status/conclusion`), status contexts (
 
 ### All green + approved
 - Determine merge convention from repo settings/recent PRs.
-- Enable auto-merge or merge directly as appropriate, e.g. `gh pr merge <number> --auto --squash`. The merge hook refuses unless HEAD carries the verified, simplified and reviewed markers (ship, Merge markers). Under the ship skill a refusal means return to ship and re-run the named gates; for a merge outside it, prefix `SHIP_GATE=off`. Before `--delete-branch`, remove any worktree holding the branch and check no other PR is based on it (ship, Cleanup).
+- Merge directly once everything is green, pinning the commit the gates passed on: `gh pr merge <number> --squash --match-head-commit <full 40-character sha>` (use the repo's merge method). The merge hook refuses a merge that does not pin its commit as a literal SHA, refuses `--auto` (auto-merge can land a later push that never passed the gates), and refuses a commit that lacks the verified, simplified and reviewed markers (ship, Merge markers). Under the ship skill a refusal means return to ship and re-run the named gates; for a merge outside it, prefix `SHIP_GATE=off`. Before `--delete-branch`, remove any worktree holding the branch and check no other PR is based on it (ship, Cleanup).
 - Confirm the PR state is merged and report the URL/merge commit if available.
 
 ## Exit conditions
