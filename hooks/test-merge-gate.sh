@@ -32,11 +32,21 @@ check deny  "cd /tmp && /usr/bin/gh pr merge https://github.com/o/r/pull/42 --me
 check deny  "FOO=1 gh pr merge 3"
 check allow "SHIP_GATE=off gh pr merge 3 --squash"
 check allow "gh --repo owner/repo pr merge 3 --squash --match-head-commit $OLD"
+check deny  "gh pr merge 3 --squash # --match-head-commit $OLD"
+check deny  "gh pr merge 3 --squash '--auto' --match-head-commit $OLD"
+check deny  "'gh' pr merge 3 --squash"
+check deny  "gh pr merge 3 --match-head-commit $OLD && gh pr merge 4"
+check deny  "gh pr merge 3 --match-head-commit $OLD --match-head-commit $NEW"
+check deny  "gh pr \\
+  merge 3 --squash"
+check allow "gh pr \\
+  merge 3 --squash --match-head-commit $OLD"
 cd "$T" || exit 1   # not a git checkout
 check deny  "gh pr merge 3 --squash --match-head-commit $OLD"
 # without jq: a merge is blocked with exit 2, anything else passes
 nojq=$(mktemp -d); for b in bash cat grep git; do ln -s "$(command -v $b)" "$nojq/$b"; done
 printf '%s' '{"tool_input":{"command":"gh pr merge 3"}}' | PATH="$nojq" bash "$H" 2>/dev/null; [ $? -eq 2 ] && echo "ok   no jq: merge blocked (exit 2)" || { echo "FAIL no jq: merge not blocked"; fail=1; }
+printf '%s' '{"tool_input":{"command":"gh pr \\\\\nmerge 3"}}' | PATH="$nojq" bash "$H" 2>/dev/null; [ $? -eq 2 ] && echo "ok   no jq: multiline merge blocked (exit 2)" || { echo "FAIL no jq: multiline merge not blocked"; fail=1; }
 printf '%s' '{"tool_input":{"command":"git status"}}' | PATH="$nojq" bash "$H"; [ $? -eq 0 ] && echo "ok   no jq: other command passes" || { echo "FAIL no jq: other command blocked"; fail=1; }
 rm -rf "$nojq"
 exit $fail

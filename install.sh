@@ -50,9 +50,16 @@ echo
 command -v jq >/dev/null || echo "WARNING: jq is not installed. The merge gate blocks every gh pr merge until it is."
 if [ "$AGENT" = codex ]; then
   if [ ! -e "$DEST/hooks.json" ]; then
-    # The shipped config names $HOME/.codex; write the directory actually installed into.
-    sed "s#\$HOME/.codex#$DEST#" "$REPO_ROOT/hooks/codex-hooks.json" > "$DEST/hooks.json"
-    printf 'installed %s\n' "$DEST/hooks.json"
+    # The shipped config names $HOME/.codex; write the directory actually installed into,
+    # quoted so a path with spaces still runs.
+    if command -v jq >/dev/null && jq --arg c "\"$DEST/hooks/ship-merge-gate.sh\"" \
+        '.hooks.PreToolUse[0].hooks[0].command = $c' "$REPO_ROOT/hooks/codex-hooks.json" > "$DEST/hooks.json.new"; then
+      mv "$DEST/hooks.json.new" "$DEST/hooks.json"
+      printf 'installed %s\n' "$DEST/hooks.json"
+    else
+      rm -f "$DEST/hooks.json.new"
+      echo "Merge gate: could not write $DEST/hooks.json (jq missing?). Copy hooks/codex-hooks.json there by hand, with the command set to $DEST/hooks/ship-merge-gate.sh."
+    fi
   else
     echo "Merge gate: $DEST/hooks.json already exists. Add the PreToolUse entry from hooks/codex-hooks.json to it by hand, with the command set to $DEST/hooks/ship-merge-gate.sh."
   fi
