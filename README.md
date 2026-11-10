@@ -50,7 +50,7 @@ The installer replaces the matching skill directories (a skill of the same name 
 - **Claude Code:** add the `PreToolUse` entry from `hooks/claude-settings.snippet.json` to `~/.claude/settings.json`, then start a new session.
 - **Codex:** the installer writes `~/.codex/hooks.json` if you have none (otherwise merge `hooks/codex-hooks.json` by hand, using the full path to the installed script as the command). Start Codex, run `/hooks`, and trust the new hook; Codex skips a hook until you do. Use Codex CLI 0.166.0 or later, where the hook is told the directory the command really runs in.
 
-The hook needs `jq` and `gh`. In Codex a hook that errors or times out lets the command run, so treat it as a guardrail, not a lock.
+The hook needs `jq`. It reads the command as text, so it catches a forgotten gate rather than a determined author: an alias or a script file gets past it. In Codex a hook that errors or times out also lets the command run. Treat it as a guardrail, not a lock.
 
 ## Usage
 
