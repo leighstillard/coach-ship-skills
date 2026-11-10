@@ -1,6 +1,8 @@
 ---
 name: simplify
-description: "Simplify a completed diff before it ships. Use before /ship, after a feature works, or when a change feels over-engineered. Removes unnecessary abstraction, scope creep, dead code introduced by the diff, and confusing structure without changing behaviour."
+description: "Simplify a completed diff before it ships. Use before the ship skill, after a feature works, when the user says simplify or /simplify, or when a change feels over-engineered. Removes unnecessary abstraction, scope creep, dead code introduced by the diff, and confusing structure without changing behaviour."
+metadata:
+  short-description: Strip a finished diff to its minimal correct form
 ---
 
 # Simplify
@@ -25,3 +27,4 @@ End with:
 - Do not beautify unrelated code.
 - Do not delete pre-existing dead code unless this diff made it unreachable.
 - Do not replace a boring existing pattern with a clever new one.
+- Merging independent `if`s into one `switch`/`if-else` chain, or reordering its cases, makes it first-match-wins. List the inputs that match more than one condition; prove that set empty or add a test for it before calling the result SIMPLIFIED. A green suite is evidence only for the inputs it exercises.

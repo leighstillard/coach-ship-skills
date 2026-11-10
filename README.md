@@ -1,29 +1,26 @@
-# Coach & Ship Skills for Claude Code
+# Coach & Ship Skills
 
-A small Claude Code workflow pack for building and shipping code changes with three goals:
+A workflow pack for building and shipping code changes with a coding agent. It comes in two versions, one for Claude Code and one for OpenAI Codex CLI, and has three goals:
 
 1. **Automation** — turn an overarching engineering goal into repeatable PR-sized loops.
-2. **Code quality** — require implementation, tests, real verification, simplification, independent review, and CI/merge babysitting.
-3. **Anthropic budget preservation** — avoid defaulting to a swarm of Claude subagents; prefer deterministic tools and Codex review/execution where safe.
-
-The pack contains one slash command, four Claude subagents, and six skills that work together:
+2. **Code quality** — require implementation, tests, real verification, simplification, an efficiency review, independent review, and CI/merge babysitting.
+3. **Budget preservation** — avoid defaulting to a swarm of subagents; prefer deterministic tools, and on Claude Code prefer Codex for review and execution where safe.
 
 ```text
-commands/
-  coach.md              # /coach implementation loop
-agents/
-  writer.md             # scoped implementation fallback
-  tester.md             # test design from contract
-  verifier.md           # real entry-point verification
-  reviewer.md           # independent diff review fallback
-skills/
-  ship/                 # release/merge gate loop
-  verify/               # prove behaviour through real entry points
-  design-check/         # visual/UX/human-facing output gate
-  pr/                   # commit, push, open PR with evidence
-  babysit/              # watch CI/reviews/conflicts until merged or blocked
-  simplify/             # remove unnecessary complexity before shipping
+claude/
+  commands/coach.md     # /coach implementation loop
+  agents/               # writer, tester, verifier, reviewer
+  skills/               # ship, simplify, efficiency-review, verify, design-check, pr, babysit
+codex/
+  skills/               # the same seven, adapted for Codex, plus code-review and security-review
+hooks/
+  ship-merge-gate.sh    # blocks `gh pr merge` until the gates passed
+  claude-settings.snippet.json
+  codex-hooks.json
+install.sh              # ./install.sh claude | codex
 ```
+
+The Codex version has no `/coach` command or subagents. It carries its own `code-review` and `security-review` skills, because Codex has no built-in equivalents of the ones Claude Code ships, and its `ship` adds a security gate.
 
 ## Philosophy
 
@@ -40,34 +37,19 @@ The workflow is intentionally evidence-first:
 
 ## Installation
 
-### Option 1: Install with the script
-
 ```bash
 git clone https://github.com/leighstillard/coach-ship-skills.git
 cd coach-ship-skills
-./install.sh
+./install.sh claude    # into ~/.claude (or $CLAUDE_HOME)
+./install.sh codex     # into ~/.codex  (or $CODEX_HOME)
 ```
 
-By default this installs into `~/.claude`.
+The installer replaces the matching skill directories, copies the merge-gate hook, and tells you how to register it:
 
-To install somewhere else:
+- **Claude Code:** add the `PreToolUse` entry from `hooks/claude-settings.snippet.json` to `~/.claude/settings.json`, then start a new session.
+- **Codex:** the installer writes `~/.codex/hooks.json` if you have none (otherwise merge `hooks/codex-hooks.json` by hand, using the full path to the installed script as the command). Start Codex, run `/hooks`, and trust the new hook; Codex skips a hook until you do. Use Codex CLI 0.166.0 or later, where the hook is told the directory the command really runs in.
 
-```bash
-CLAUDE_HOME=/path/to/.claude ./install.sh
-```
-
-### Option 2: Manual install
-
-Copy the files into your Claude Code config directory:
-
-```bash
-mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
-cp commands/coach.md ~/.claude/commands/coach.md
-cp agents/*.md ~/.claude/agents/
-cp -R skills/ship skills/verify skills/design-check skills/pr skills/babysit skills/simplify ~/.claude/skills/
-```
-
-Restart Claude Code, or start a new Claude Code session, so commands/skills/agents are reloaded.
+The hook needs `jq` and `gh`. In Codex a hook that errors or times out lets the command run, so treat it as a guardrail, not a lock.
 
 ## Usage
 
@@ -96,22 +78,27 @@ Inside Claude Code:
 /ship
 ```
 
-`/ship` enforces these invariants before merge:
+`ship` enforces these invariants before merge:
 
-1. Diff understood.
+1. Diff understood, with a clean secrets scan.
 2. Simplified.
-3. Verified with real entry-point evidence.
-4. Design checked if user-visible.
-5. PR body carries evidence.
-6. Independent review addressed.
-7. CI green and review uncontested.
-8. Merged or blocked honestly.
+3. Efficient (`efficiency-review` passes).
+4. Verified with real entry-point evidence.
+5. Design checked if user-visible.
+6. Security reviewed when the diff touches a security surface (Codex version).
+7. PR body carries evidence.
+8. Independent review addressed, including review-bot threads.
+9. CI green and review uncontested.
+10. Merged or blocked honestly.
+11. Cleaned up: branch, worktrees, strays, and follow-up issues.
+
+`simplify`, `verify`, and independent review each leave a marker file for the commit they passed on, and the merge-gate hook refuses `gh pr merge` when the PR's head commit lacks one. A fix after review is a new commit with no markers, so it goes back through the gates.
 
 ## Recommended companion tooling
 
 This pack works best with:
 
-- Claude Code
+- Claude Code or OpenAI Codex CLI
 - Git + GitHub CLI (`gh`)
 - OpenAI Codex Claude Code plugin/companion commands, if available, for budget-aware implementation and independent review
 - A project-level `AGENTS.md` or `CLAUDE.md` containing build/test/verification commands
@@ -146,10 +133,10 @@ Re-run:
 
 ```bash
 git pull
-./install.sh
+./install.sh claude   # or codex
 ```
 
-The installer overwrites the matching command/agent/skill files in `~/.claude`.
+The installer overwrites the matching command, agent, skill, and hook files.
 
 ## License
 
