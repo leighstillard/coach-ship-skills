@@ -16,7 +16,7 @@ Poll without spinning:
 gh pr view <number> --json state,reviewDecision,mergeable,comments,headRefName,baseRefName
  gh pr checks <number>
 ```
-Wait 60-120 seconds between unchanged pending states. To wait on checks, run `scripts/watch-checks.sh <number>` once in the foreground first; arm it as a background watch only after that run printed a real state. It loops while `gh pr checks` reports pending (exit 8), then exits 0 (all passed) or 1 (a check failed); any other `gh` exit stops it with exit 2 and the error printed, so a broken query never looks like "no checks".
+Wait 60-120 seconds between unchanged pending states. To wait on checks, run `scripts/watch-checks.sh <number>` once in the foreground first; arm it as a background watch only after that run printed a real state. It loops while `gh pr checks` reports pending (exit 8), then exits 0 (all passed) or 1 (a check failed). Exit 3 means the PR has no checks reported (none configured, or none started yet: look again once before treating it as "no CI"), and exit 4 means checks were still pending after 30 minutes, which is the point to decide about a check that will not finish. Any other `gh` exit stops it with exit 2 and the error printed, so a broken query never looks like "no checks".
 
 Every PR body write (accepted reds, a bot skipped, evidence) goes through REST and is read back, never `gh pr edit --body`:
 ```bash

@@ -10,7 +10,7 @@ A clean branch is pushed and a PR exists with enough evidence for a reviewer to 
 
 ## Step 1: Pre-flight
 - Run `git status --short --untracked-files=all` and inspect `git diff` / staged diff.
-- Run a secrets scanner, not a glance: `gitleaks git --no-banner .` over the branch commits and `gitleaks dir .` over the tree (install: `go install github.com/zricethezav/gitleaks/v8@latest`; any equivalent scanner is fine). Paste the clean result under How verified. Then confirm no `.env`, debug prints, unrelated files, generated junk, or large binaries are included.
+- Run a secrets scanner, not a glance: `gitleaks git --no-banner --log-opts="origin/<default>..HEAD" .` over the branch commits and `gitleaks dir .` over the tree (install: `go install github.com/zricethezav/gitleaks/v8@latest`; any equivalent scanner is fine). Paste the clean result under How verified. Then confirm no `.env`, debug prints, unrelated files, generated junk, or large binaries are included.
 - Identify the default branch (`gh repo view --json defaultBranchRef` or `git symbolic-ref refs/remotes/origin/HEAD`).
 - Do not commit on the default branch. Create a short kebab-case branch if needed.
 - If the branch is stale, rebase/merge according to repo convention before opening the PR.

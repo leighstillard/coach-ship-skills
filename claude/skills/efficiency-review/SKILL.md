@@ -9,7 +9,7 @@ Gate, not advisor. Every blocking finding must be a concrete, reproducible claim
 
 ## 1. Scope
 
-- Diff mode (default): `git diff --merge-base origin/main HEAD` (or the base the pipeline passes). Review changed hunks plus the functions that call them — a hot path is often unchanged code that now calls new slow code.
+- Diff mode (default): `git diff --merge-base origin/main` (no second commit, so staged and unstaged work is included) (or the base the pipeline passes). Review changed hunks plus the functions that call them — a hot path is often unchanged code that now calls new slow code.
 - Codebase mode: only when asked explicitly. Walk entry points → data access → hot loops; do not read everything.
 
 ## 2. Detect what's in use

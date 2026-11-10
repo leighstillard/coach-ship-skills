@@ -42,7 +42,7 @@ A new commit has a new SHA and no markers, so a late review fix sends you back t
 Some repos make human review the gate: their contributor rules (`AGENTS.md`, `CONTRIBUTING.md`, branch protection) say authors never merge their own feature work. In such a repo **Merged or blocked honestly** changes:
 
 - **Ship stops at review handed off, not merged.** Once the PR is open with evidence, independent review addressed, requested reviewers assigned, and CI green, ship is **done**. Report the terminal state as `REVIEW REQUESTED` (not `MERGED`). Do **not** run the `babysit` skill to sit on the PR and merge it.
-- **Exception: merge only when the humans have already cleared it.** If every requested (non-author) reviewer has already approved and no review is still pending or requesting changes, ship may merge, respecting the repo's merge convention and target branch. Otherwise, hand off and stop.
+- **Exception: merge only when the humans have already cleared it.** If at least one non-author reviewer has approved, every requested reviewer has approved, and no review is still pending or requesting changes, ship may merge, respecting the repo's merge convention and target branch. Otherwise, hand off and stop.
 - CI-fix and review-comment loops before that handoff still apply. This override only removes the babysit-to-merge tail, not the gates before it.
 
 Record any other per-repo rule the same way: name the repo, name the invariant it changes, and say what the terminal state becomes.
