@@ -45,6 +45,16 @@ check deny  "gh pr \\
   merge 3 --squash"
 check allow "gh pr \\
   merge 3 --squash --match-head-commit $OLD"
+# quoted --subject/--body values are skipped; other quoted text is still read
+check allow "gh pr merge 3 --squash --subject \"Fix #12 (pr merge --auto)\" --match-head-commit $OLD"
+check allow "gh pr merge 3 --squash -b 'see #4; --auto is off' --match-head-commit $OLD"
+check deny  "gh pr merge 3 --squash --subject \"x --match-head-commit $OLD\""
+check allow "gh pr merge 3 --squash --match-head-commit \"$OLD\""
+check allow "gh pr merge 3 --squash --match-head-commit '$OLD'"
+check deny  "gh pr merge 3 --squash --subject \"a \\\" b\" --match-head-commit $OLD"
+check deny  "gh pr merge 3 --squash --subject \"unclosed --match-head-commit $OLD"
+check deny  "gh pr merge 3 --squash --match-head-commit $OLD; sh -c \"gh pr merge 4\""
+check deny  "gh pr merge 3 --squash --match-head-commit $OLD \"--auto\""
 # repo B, gated, merged from a session in repo A
 check allow "cd $T/b && gh pr merge 1 --squash --match-head-commit $SHB"
 check allow "cd \"$T/b c\" && gh pr merge 1 --squash --match-head-commit $SHB"

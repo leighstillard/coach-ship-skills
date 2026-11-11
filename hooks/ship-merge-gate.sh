@@ -14,8 +14,9 @@
 # This reads the command as text, so it stops a forgotten gate, not a determined author:
 # an alias, a script file, or a command built at run time gets past it. To keep the text
 # honest it refuses anything it cannot read simply: a merge command with a comment, with
-# more than one merge, or with more than one pin. That also refuses a merge whose
-# --subject or --body text contains a #, "--auto" or "pr merge"; merge without that text.
+# more than one merge, or with more than one pin, or quoting it cannot pair (an escaped
+# quote, an unclosed one). A quoted --subject/-t/--body/-b value is skipped; other quoted
+# text is read like the rest of the command.
 # Text that merely mentions "gh ... pr merge" is treated as a merge (refused, the safe side).
 INPUT=$(cat)
 Q="[\"']?"   # an optional quote around a word
@@ -26,15 +27,29 @@ if ! command -v jq >/dev/null; then
   echo "ship merge gate: jq is not installed, so this merge cannot be checked. Install jq, or prefix SHIP_GATE=off for a merge outside ship." >&2
   exit 2
 fi
-CMD=$(jq -r '.tool_input.command // empty' <<<"$INPUT" | tr '\\\n' '  ')   # join continued lines
+RAWCMD=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
+CMD=$(tr '\\\n' '  ' <<<"$RAWCMD")   # join continued lines
 grep -qE "$MERGE_RE" <<<"$CMD" || exit 0
 grep -qE '(^|[[:space:];&|])SHIP_GATE=off[[:space:]]' <<<"$CMD" && exit 0
 deny() { jq -n --arg r "ship merge gate: $1 Prefix SHIP_GATE=off only for a merge that is not going through ship." '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'; exit 0; }
-[ "$(grep -oE "pr$Q[[:space:]]+${Q}merge" <<<"$CMD" | wc -l)" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."
-grep -q '#' <<<"$CMD" && deny "the merge command contains a # comment, which could hide a flag from this check. Run the merge without it (a # inside --subject or --body counts too)."
-[ "$(grep -o -- '--match-head-commit' <<<"$CMD" | wc -l)" -le 1 ] || deny "more than one --match-head-commit. Pin exactly one commit."
-grep -q -- '--auto' <<<"$CMD" && deny "auto-merge can land a later commit that never passed the gates. Wait for the checks, then merge with --match-head-commit <sha>."
-SHA=$(grep -oE -- '--match-head-commit[=[:space:]]+"?[0-9a-f]{40}' <<<"$CMD" | head -1 | grep -oE '[0-9a-f]{40}$')
+UNREAD="the merge command has quoting this check cannot read; simplify it."
+[[ $RAWCMD == *\\[\"\']* ]] && deny "$UNREAD"
+# CHK = CMD with each quoted --subject/-t/--body/-b value replaced by QUOTED; other quoted text stays readable
+CHK=""; R=$CMD; QRE="^([^\"']*)([\"'])(.*)$"
+while [[ $R =~ $QRE ]]; do
+  CHK+=${BASH_REMATCH[1]}; q=${BASH_REMATCH[2]}; R=${BASH_REMATCH[3]}
+  [[ $R == *"$q"* ]] || deny "$UNREAD"
+  S=${R%%"$q"*}; R=${R#*"$q"}
+  if [[ $CHK =~ (^|[[:space:]])(--subject|-t|--body|-b)(=|[[:space:]]+)$ ]]; then CHK+=QUOTED
+  elif [[ $S =~ ^([0-9a-f]{40}|gh|pr|merge)$ ]]; then CHK+=$S
+  else CHK+=$q$S$q; fi
+done
+CHK+=$R
+[ "$(grep -oE "pr$Q[[:space:]]+${Q}merge" <<<"$CHK" | wc -l)" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."
+grep -q '#' <<<"$CHK" && deny "the merge command contains a # comment, which could hide a flag from this check. Run the merge without it."
+[ "$(grep -o -- '--match-head-commit' <<<"$CHK" | wc -l)" -le 1 ] || deny "more than one --match-head-commit. Pin exactly one commit."
+grep -q -- '--auto' <<<"$CHK" && deny "auto-merge can land a later commit that never passed the gates. Wait for the checks, then merge with --match-head-commit <sha>."
+SHA=$(grep -oE -- '--match-head-commit[=[:space:]]+[0-9a-f]{40}' <<<"$CHK" | head -1 | grep -oE '[0-9a-f]{40}$')
 [ -n "$SHA" ] || deny "the merge must pin its commit: add --match-head-commit followed by the literal 40-character SHA the gates passed on (not a \$(...) substitution, which the hook cannot read)."
 DIR=$(jq -r '.cwd // empty' <<<"$INPUT"); DIR=${DIR:-$PWD}
 # A first command `cd <literal path> &&` (or `;`) names the checkout instead of the session's.
