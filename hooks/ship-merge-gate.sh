@@ -24,7 +24,7 @@
 # Text that merely mentions "gh ... pr merge" is treated as a merge (refused, the safe side).
 INPUT=$(cat)
 Q="[\"']?"   # an optional quote around a word
-FLAGS="([[:space:]]+(-R|--repo)[=[:space:]]+[^-[:space:];&|][^[:space:];&|]*)*"   # pr --repo o/r merge
+FLAGS="([[:space:]]+-[^[:space:];&|]+([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?)*"   # pr -R o/r merge, pr -Ro/r merge, ...
 PR_MERGE="${Q}pr$Q$FLAGS[[:space:]]+${Q}merge([^[:alnum:]_-]|\$)"
 MERGE_CORE="gh$Q([[:space:]]+[^;&|]*)?[[:space:]]+$PR_MERGE"
 MERGE_RE="(^|[^[:alnum:]_-])$MERGE_CORE"
@@ -53,9 +53,9 @@ while [[ $R =~ $QRE ]]; do
   else CHK+=$q$S$q; fi
 done
 CHK+=$R
-[ "$(grep -oE "(^|[^[:alnum:]_-])$PR_MERGE" <<<"$CHK" | wc -l)" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."
+[ "$(tr ';&|()`' '\n\n\n\n\n\n' <<<"$CHK" | grep -cE "$MERGE_RE")" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."   # one per simple command, $(...) included
 # the bypass counts only as a prefix of that one merge, read after quoted subjects are masked
-grep -qE "(^|[;&|])[[:space:]]*${ASSIGN}SHIP_GATE=off[[:space:]]+$ASSIGN([^[:space:];&|]*/)?$MERGE_CORE" <<<"$CHK" && exit 0
+grep -qE "(^|[;&|(])[[:space:]]*${ASSIGN}SHIP_GATE=off[[:space:]]+$ASSIGN([^[:space:];&|]*/)?$MERGE_CORE" <<<"$CHK" && exit 0
 grep -q '#' <<<"$CHK" && deny "the merge command contains a # comment, which could hide a flag from this check. Run the merge without it."
 [ "$(grep -o -- '--match-head-commit' <<<"$CHK" | wc -l)" -le 1 ] || deny "more than one --match-head-commit. Pin exactly one commit."
 grep -q -- '--auto' <<<"$CHK" && deny "auto-merge can land a later commit that never passed the gates. Wait for the checks, then merge with --match-head-commit <sha>."
