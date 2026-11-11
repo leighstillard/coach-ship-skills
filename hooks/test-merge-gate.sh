@@ -11,6 +11,10 @@ m="$(git rev-parse --path-format=absolute --git-common-dir)/ship"; mkdir -p "$m"
 touch "$m/$OLD.simplified" "$m/$OLD.verified" "$m/$OLD.reviewed"
 git -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m two
 NEW=$(git rev-parse HEAD)   # no markers
+git init -q "$T/b"; git -C "$T/b" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m b
+SHB=$(git -C "$T/b" rev-parse HEAD); mb="$T/b/.git/ship"; mkdir -p "$mb"
+touch "$mb/$SHB.simplified" "$mb/$SHB.verified" "$mb/$SHB.reviewed"
+ln -s "$T/b" "$T/b c"   # the same repo B under a path with a space
 fail=0
 check() { # <want: allow|deny> <command>
   out=$(jq -n --arg c "$2" --arg d "$PWD" '{tool_name:"Bash",cwd:$d,tool_input:{command:$c}}' | bash "$H")
@@ -41,6 +45,16 @@ check deny  "gh pr \\
   merge 3 --squash"
 check allow "gh pr \\
   merge 3 --squash --match-head-commit $OLD"
+# repo B, gated, merged from a session in repo A
+check allow "cd $T/b && gh pr merge 1 --squash --match-head-commit $SHB"
+check allow "cd \"$T/b c\" && gh pr merge 1 --squash --match-head-commit $SHB"
+check allow "cd ../b && gh pr merge 1 --squash --match-head-commit $SHB"
+check allow "FOO=1 cd '../b c'; gh pr merge 1 --squash --match-head-commit $SHB"
+check deny  "gh pr merge 1 --squash --match-head-commit $SHB"
+check deny  "cd \$HOME/x && gh pr merge 1 --squash --match-head-commit $SHB"
+check deny  "git status && cd $T/b && gh pr merge 1 --squash --match-head-commit $SHB"
+out=$(jq -n --arg c "gh pr merge 1 --squash --match-head-commit $SHB" --arg d "$PWD" '{tool_name:"Bash",cwd:$d,tool_input:{command:$c}}' | bash "$H")
+grep -q 'is not in' <<<"$out" && echo "ok   pin from another repo names 'is not in'" || { echo "FAIL pin from another repo: $out"; fail=1; }
 cd "$T" || exit 1   # not a git checkout
 check deny  "gh pr merge 3 --squash --match-head-commit $OLD"
 # without jq: a merge is blocked with exit 2, anything else passes

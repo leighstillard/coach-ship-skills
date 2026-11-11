@@ -6,6 +6,9 @@
 # gh itself refuses the merge when the PR head is no longer that commit, so the hook never
 # has to work out which PR or repository the command means. A new commit has a new SHA
 # and no markers.
+# The checkout is the session's directory (.cwd), unless the command starts with
+# `cd <path> &&` or `cd <path> ;` where <path> is literal (quoted or bare, no $ or backtick,
+# relative to .cwd, ~/ meaning $HOME): then it is <path>. The pinned commit must exist there.
 # Auto-merge is refused: it can land a later push that never passed the gates.
 # Deliberate bypass, visible in the transcript: prefix the command with SHIP_GATE=off.
 # This reads the command as text, so it stops a forgotten gate, not a determined author:
@@ -34,7 +37,16 @@ grep -q -- '--auto' <<<"$CMD" && deny "auto-merge can land a later commit that n
 SHA=$(grep -oE -- '--match-head-commit[=[:space:]]+"?[0-9a-f]{40}' <<<"$CMD" | head -1 | grep -oE '[0-9a-f]{40}$')
 [ -n "$SHA" ] || deny "the merge must pin its commit: add --match-head-commit followed by the literal 40-character SHA the gates passed on (not a \$(...) substitution, which the hook cannot read)."
 DIR=$(jq -r '.cwd // empty' <<<"$INPUT"); DIR=${DIR:-$PWD}
+# A first command `cd <literal path> &&` (or `;`) names the checkout instead of the session's.
+DQ="\"([^\"\$\`]*)\""; SQ="'([^'\$\`]*)'"; BARE="([^\"'[:space:];&|\$\`]+)"
+CD_RE="^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*cd[[:space:]]+($DQ|$SQ|$BARE)[[:space:]]*(&&|;)"
+if [[ $CMD =~ $CD_RE ]]; then
+  P="${BASH_REMATCH[3]}${BASH_REMATCH[4]}${BASH_REMATCH[5]}"   # one of the three is set
+  case "${BASH_REMATCH[5]}" in "~") P=$HOME ;; "~/"*) P=$HOME/${P#"~/"} ;; "~"*) P="" ;; esac   # bare ~ only; ~user is not read
+  [ -n "$P" ] && { [[ $P == /* ]] && DIR=$P || DIR=$DIR/$P; }
+fi
 GD=$(git -C "$DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || deny "$DIR is not a git checkout, so no markers can be checked. Run the merge from the checkout the gates ran in."
+git -C "$DIR" cat-file -e "$SHA^{commit}" 2>/dev/null || deny "commit ${SHA:0:12} is not in $DIR. Run the merge from the checkout the gates ran in, or start the command with cd <that checkout> &&."
 MISSING=""
 for g in simplified verified reviewed; do [ -e "$GD/ship/$SHA.$g" ] || MISSING="$MISSING $g"; done
 [ -z "$MISSING" ] && exit 0
