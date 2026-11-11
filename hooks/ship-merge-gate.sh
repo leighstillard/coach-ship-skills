@@ -24,8 +24,9 @@
 # Text that merely mentions "gh ... pr merge" is treated as a merge (refused, the safe side).
 INPUT=$(cat)
 Q="[\"']?"   # an optional quote around a word
-FLAGS="([[:space:]]+-[^[:space:];&|]+([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?)*"   # e.g. pr --repo o/r merge
-MERGE_CORE="gh$Q([[:space:]]+[^;&|]*)?[[:space:]]+${Q}pr$Q$FLAGS[[:space:]]+${Q}merge([^[:alnum:]_-]|\$)"
+FLAGS="([[:space:]]+(-R|--repo)[=[:space:]]+[^-[:space:];&|][^[:space:];&|]*)*"   # pr --repo o/r merge
+PR_MERGE="${Q}pr$Q$FLAGS[[:space:]]+${Q}merge([^[:alnum:]_-]|\$)"
+MERGE_CORE="gh$Q([[:space:]]+[^;&|]*)?[[:space:]]+$PR_MERGE"
 MERGE_RE="(^|[^[:alnum:]_-])$MERGE_CORE"
 ASSIGN="([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*"
 if ! command -v jq >/dev/null; then
@@ -37,7 +38,6 @@ fi
 RAWCMD=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
 CMD=${RAWCMD//$'\\\n'/}; CMD=${CMD//$'\n'/;}; CMD=${CMD//\\/ }   # join continued lines; a newline separates commands
 grep -qE "$MERGE_RE" <<<"$CMD" || exit 0
-grep -qE "(^|[;&|(])[[:space:]]*${ASSIGN}SHIP_GATE=off[[:space:]]+$ASSIGN$MERGE_CORE" <<<"$CMD" && exit 0   # only as a prefix of the merge itself
 deny() { jq -n --arg r "ship merge gate: $1 Prefix SHIP_GATE=off only for a merge that is not going through ship." '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'; exit 0; }
 UNREAD="the merge command has quoting this check cannot read; simplify it."
 T=${RAWCMD//\\\\/}; [[ $T == *\\[\"\']* ]] && deny "$UNREAD"   # an escaped quote (an odd run of backslashes)
@@ -53,7 +53,9 @@ while [[ $R =~ $QRE ]]; do
   else CHK+=$q$S$q; fi
 done
 CHK+=$R
-[ "$(grep -oE '(^|[^[:alnum:]_-])merge([^[:alnum:]_-]|$)' <<<"$CHK" | wc -l)" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."
+[ "$(grep -oE "(^|[^[:alnum:]_-])$PR_MERGE" <<<"$CHK" | wc -l)" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."
+# the bypass counts only as a prefix of that one merge, read after quoted subjects are masked
+grep -qE "(^|[;&|])[[:space:]]*${ASSIGN}SHIP_GATE=off[[:space:]]+$ASSIGN([^[:space:];&|]*/)?$MERGE_CORE" <<<"$CHK" && exit 0
 grep -q '#' <<<"$CHK" && deny "the merge command contains a # comment, which could hide a flag from this check. Run the merge without it."
 [ "$(grep -o -- '--match-head-commit' <<<"$CHK" | wc -l)" -le 1 ] || deny "more than one --match-head-commit. Pin exactly one commit."
 grep -q -- '--auto' <<<"$CHK" && deny "auto-merge can land a later commit that never passed the gates. Wait for the checks, then merge with --match-head-commit <sha>."

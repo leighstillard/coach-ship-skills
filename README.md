@@ -81,7 +81,7 @@ Prefix the command with `SHIP_GATE=off`. That is visible in the transcript, whic
 The hook looks for markers in the session's checkout. Start the command with `cd /path/to/checkout &&` and it checks that checkout instead. The path must be literal: no `$VAR`, backticks or `~user`.
 
 **Can the agent get around the hook?**
-Yes, if it tries. The hook reads the command as text, so an alias, a script file or a command built at run time gets past it. It also refuses anything it cannot read simply: comments, two merges in one command, two pins, escaped or unbalanced quotes. Quoted `--subject` and `--body` values are ignored, so `Fix #12` in a subject is fine. It is there to catch a forgotten gate, not to stop someone who means to skip it.
+Yes, if it tries. The hook reads the command as text, so an alias, a script file or a command built at run time gets past it. It also refuses anything it cannot read simply: comments, two merges in one command, two pins, escaped or unbalanced quotes. Quoted `--subject` and `--body` values are ignored, so `Fix #12` in a subject is fine, unless the value is double-quoted and contains `$(...)` or a backtick, since the shell runs that. It is there to catch a forgotten gate, not to stop someone who means to skip it.
 
 **Why refuse `--auto`?**
 Auto-merge merges whatever the head is when the checks finish, which may be a commit pushed after review.
