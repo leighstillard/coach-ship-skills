@@ -10,6 +10,8 @@
 # `cd <path> &&` or `cd <path> ;` where <path> is literal (quoted or bare, no $ or backtick,
 # relative to .cwd, ~/ meaning $HOME): then it is <path>. The pinned commit must exist there.
 # Auto-merge is refused: it can land a later push that never passed the gates.
+# Limit: on a merge queue branch gh enables auto-merge itself while required checks are
+# pending; the hook cannot see branch protection, so babysit merges only on settled checks.
 # Deliberate bypass, visible in the transcript: prefix the command with SHIP_GATE=off.
 # This reads the command as text, so it stops a forgotten gate, not a determined author:
 # an alias, a script file, or a command built at run time gets past it. To keep the text
