@@ -1,5 +1,5 @@
 ---
-name: verify
+name: "verify"
 description: "Prove a change actually works before it ships. Use whenever a change is done, after implementing a feature/fix, before opening a PR, or when the user says verify/check this works/is this actually working. Tests passing is not sufficient; this skill requires real entry-point evidence."
 ---
 
@@ -15,7 +15,7 @@ Briefly state what the change is supposed to do from the user's perspective. If 
 ### 2. Run the existing gates
 Run the repo's relevant gates, escalating from cheapest to broadest:
 - format/lint/typecheck/build
-- focused tests for touched area
+- tests for every package or directory the diff touches, derived from the diff rather than from memory: `git diff --name-only <base> -- '*.go' | xargs -n1 dirname | sort -u | sed 's#^#./#'` fed to `go test`, or the equivalent per-directory test target in other languages. When the whole suite finishes in a couple of minutes, run it all instead; a hand-picked list drifts toward the code that was interesting to write.
 - full test suite when practical before PR/merge
 
 If a gate was already failing before the change, record that evidence and do not pretend it passed.
@@ -29,6 +29,8 @@ Exercise the actual surface:
 - Library → write and run a throwaway consumer script.
 
 Capture command + representative output. Screenshots or logs count only when tied to the command/path that produced them.
+
+When the change chains model calls (each step an LLM or agent CLI), a COMPLETED status proves nothing: every step succeeds whatever it was given. The evidence then includes (a) one handoff check: step N's output names something only step N-1's output contained; and (b) for each safety claim (read-only, dry run, no network), the flag, permission or tool list that enforces it, plus a probe that tries to break it and shows it failed. A sentence in the prompt is not enforcement.
 
 ### 4. Edge/failure sweep
 Try the highest-value applicable cases, not an infinite checklist:

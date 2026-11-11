@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.codex/hooks/ship-merge-gate.sh", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}
