@@ -1,6 +1,6 @@
 ---
 name: "ship"
-description: "Take a finished local change to a merged PR through non-negotiable release gates. Use when the user says ship it, /ship, get this merged, release this, or when /coach has a READY local diff. Enforces simplify, efficiency review, verify, design applicability, PR evidence, independent review, CI, and merge babysitting while preserving Anthropic budget where safe."
+description: "Take a finished local change to a merged PR through non-negotiable release gates. Use when the user says ship it, /ship, get this merged, release this, or when /coach has a READY local diff. Enforces simplify, efficiency review, verify, design applicability, security applicability, PR evidence, independent review, CI, and merge babysitting while preserving Anthropic budget where safe."
 ---
 
 # Ship
@@ -16,11 +16,12 @@ These are preconditions, not a checklist. If any is unmet, achieving it becomes 
 3. **Efficient.** `/efficiency-review` ended in `EFFICIENCY_REVIEW: PASS` on the final shape (Medium/Low findings go in the PR body as notes). `FAIL` means fix the Critical/High findings and re-run; a fix reopens **Simplified**, and any code change after `PASS` reopens this invariant.
 4. **Verified.** `/verify` ended in `VERIFIED` with real entry-point evidence. Tests/builds alone do not satisfy this. Any code change after `VERIFIED` reopens this invariant.
 5. **Design checked when user-visible.** `/design-check` passed, passed with notes, or returned `DESIGN N/A`.
-6. **PR carries evidence.** `/pr` opened a PR whose body includes verification evidence, review/design notes, and risk/rollback.
-7. **Independent review addressed.** Prefer `/codex:review --wait` for normal diffs and `/codex:adversarial-review --wait` when Codex is available and the diff touches a trust boundary. Decide by the files touched, not by how the change feels: hooks or anything that runs on session events, auth or secrets handling, settings/config merging, install or release scripts, CI and workflow files, network clients. Otherwise use an independent Claude reviewer. Repo-installed review bots (a Codex connector, CodeRabbit, or similar) are reviewers too: find them as bot authors in `gh api repos/<o>/<r>/pulls/<n>/comments` and `.../issues/<n>/comments` and as check runs, read every thread they open before merge, and reply on each with the fix commit or a rebuttal. Critical findings are fixed; important findings are fixed or explicitly accepted/rebutted. Non-trivial fixes reopen **Simplified**, **Efficient**, **Verified** and **Design checked when user-visible**, and the merge gate below enforces it.
-8. **Green and uncontested.** CI is green, or green except credential-only reds that the PR body documents with the exact missing requirement and a tracking issue (`/babysit`, first-run bucket); required approvals and review comments are addressed; every repo review bot has finished, or `/babysit` has recorded the decision to merge without it; conflicts are resolved; merge method matches repo convention.
-9. **Merged or blocked honestly.** `/babysit` owns the final loop until merged or a real blocker is reported. **See Repo overrides: a repo that never self-merges changes this invariant.**
-10. **Cleaned up.** After a merge (or a terminal handoff), no debris is left behind. See **Cleanup** below. This invariant only comes due once the diff has landed or ship has stopped; a blocked ship reports what it *would* clean, then stops.
+6. **Security reviewed when applicable.** If the diff touches auth, user input handling, secrets, network calls, file paths, subprocess execution, or deserialization, Claude Code's built-in `/security-review` (it reviews the pending changes on the branch) reported no findings, or every finding is fixed or explicitly accepted in the PR body. Otherwise mark `SECURITY N/A`. A fix reopens **Simplified**, **Efficient** and **Verified**.
+7. **PR carries evidence.** `/pr` opened a PR whose body includes verification evidence, review/design notes, and risk/rollback.
+8. **Independent review addressed.** Prefer `/codex:review --wait` for normal diffs and `/codex:adversarial-review --wait` when Codex is available and the diff touches a trust boundary. Decide by the files touched, not by how the change feels: hooks or anything that runs on session events, auth or secrets handling, settings/config merging, install or release scripts, CI and workflow files, network clients. Otherwise use an independent Claude reviewer. Repo-installed review bots (a Codex connector, CodeRabbit, or similar) are reviewers too: find them as bot authors in `gh api repos/<o>/<r>/pulls/<n>/comments` and `.../issues/<n>/comments` and as check runs, read every thread they open before merge, and reply on each with the fix commit or a rebuttal. Critical findings are fixed; important findings are fixed or explicitly accepted/rebutted. Non-trivial fixes reopen **Simplified**, **Efficient**, **Verified**, **Design checked when user-visible** and **Security reviewed when applicable**, and the merge gate below enforces it.
+9. **Green and uncontested.** CI is green, or green except credential-only reds that the PR body documents with the exact missing requirement and a tracking issue (`/babysit`, first-run bucket); required approvals and review comments are addressed; every repo review bot has finished, or `/babysit` has recorded the decision to merge without it; conflicts are resolved; merge method matches repo convention.
+10. **Merged or blocked honestly.** `/babysit` owns the final loop until merged or a real blocker is reported. **See Repo overrides: a repo that never self-merges changes this invariant.**
+11. **Cleaned up.** After a merge (or a terminal handoff), no debris is left behind. See **Cleanup** below. This invariant only comes due once the diff has landed or ship has stopped; a blocked ship reports what it *would* clean, then stops.
 
 **Merge markers.** A user-level PreToolUse hook (`~/.claude/hooks/ship-merge-gate.sh`) refuses `gh pr merge` unless the command pins its commit with `--match-head-commit <sha>` and that commit has all three markers. It also refuses `--auto`, because auto-merge can land a later push that never passed the gates. Write each one the moment its gate ends green on the current HEAD, never before and never from memory:
 
@@ -69,6 +70,7 @@ Maintain a visible invariant checklist. Report transitions tersely:
 - `[ship] simplify: SIMPLIFIED → efficiency`
 - `[ship] efficiency: PASS → verify`
 - `[ship] verify: NOT VERIFIED → fixing blocker`
+- `[ship] security: SECURITY N/A → pr`
 - `[ship] review: critical fixed → re-verify`
 - `[ship] ci: green + approved → merge`
 
@@ -78,6 +80,7 @@ The PR body must contain:
 - reason/context (`Why`)
 - verification commands and representative output (`How verified`)
 - design screenshots/output or `DESIGN N/A`
+- security review status or `SECURITY N/A`
 - independent review status and unresolved accepted risks
 - rollback notes
 
@@ -93,6 +96,7 @@ Invariant status:
 - Efficiency: <PASS/PASS WITH NOTES/FAIL>
 - Verified: <VERIFIED/NOT VERIFIED>
 - Design: <PASS/PASS WITH NOTES/DESIGN N/A/FAIL>
+- Security: <PASS/N/A/findings>
 - Review: <tool used + unresolved findings>
 - CI/merge: <status>
 - Cleanup: <branch deleted? worktree removed? tree clean? strays/scratch handled? follow-ups filed — or N/A if not merged>

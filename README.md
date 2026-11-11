@@ -21,7 +21,7 @@ hooks/
 install.sh              # ./install.sh claude | codex
 ```
 
-The Codex version has no `/coach` command or subagents. It carries its own `code-review` and `security-review` skills, because Codex has no built-in equivalents of the ones Claude Code ships, and its `ship` adds a security gate. The Claude version of `ship` has no security gate of its own yet; run Claude Code's `/security-review` yourself on a security-sensitive diff.
+The Codex version has no `/coach` command or subagents. It carries its own `code-review` and `security-review` skills, because Codex has no built-in equivalents of the ones Claude Code ships, and its `ship` runs its own `security-review` skill for the security gate. The Claude version of `ship` uses Claude Code's built-in `/security-review` for the same gate.
 
 ## Philosophy
 
@@ -86,7 +86,7 @@ Inside Claude Code:
 3. Efficient (`efficiency-review` passes).
 4. Verified with real entry-point evidence.
 5. Design checked if user-visible.
-6. Security reviewed when the diff touches a security surface (Codex version).
+6. Security reviewed when the diff touches a security surface.
 7. PR body carries evidence.
 8. Independent review addressed, including review-bot threads.
 9. CI green and review uncontested.
