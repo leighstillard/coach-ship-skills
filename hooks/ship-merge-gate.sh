@@ -12,17 +12,22 @@
 # Auto-merge is refused: it can land a later push that never passed the gates.
 # Limit: on a merge queue branch gh enables auto-merge itself while required checks are
 # pending; the hook cannot see branch protection, so babysit merges only on settled checks.
-# Deliberate bypass, visible in the transcript: prefix the command with SHIP_GATE=off.
+# Deliberate bypass, visible in the transcript: prefix the merge itself with SHIP_GATE=off
+# (an assignment anywhere else, or in quoted text, does not count). A newline separates
+# commands; a backslash-newline joins lines. A leading cd that cannot be read is refused.
 # This reads the command as text, so it stops a forgotten gate, not a determined author:
 # an alias, a script file, or a command built at run time gets past it. To keep the text
 # honest it refuses anything it cannot read simply: a merge command with a comment, with
 # more than one merge, or with more than one pin, or quoting it cannot pair (an escaped
-# quote, an unclosed one). A quoted --subject/-t/--body/-b value is skipped; other quoted
-# text is read like the rest of the command.
+# quote, an unclosed one). A quoted --subject/-t/--body/-b value is skipped unless it is
+# double-quoted with a $(...) or backtick in it; other quoted text is read like the rest.
 # Text that merely mentions "gh ... pr merge" is treated as a merge (refused, the safe side).
 INPUT=$(cat)
 Q="[\"']?"   # an optional quote around a word
-MERGE_RE="(^|[^[:alnum:]_-])gh$Q([[:space:]]+[^;&|]*)?[[:space:]]+${Q}pr$Q[[:space:]]+${Q}merge([^[:alnum:]_-]|\$)"
+FLAGS="([[:space:]]+-[^[:space:];&|]+([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?)*"   # e.g. pr --repo o/r merge
+MERGE_CORE="gh$Q([[:space:]]+[^;&|]*)?[[:space:]]+${Q}pr$Q$FLAGS[[:space:]]+${Q}merge([^[:alnum:]_-]|\$)"
+MERGE_RE="(^|[^[:alnum:]_-])$MERGE_CORE"
+ASSIGN="([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*"
 if ! command -v jq >/dev/null; then
   RAW=${INPUT//\\n/ }; RAW=${RAW//\\/ }   # inside the JSON a continued line is a backslash pair and \n
   grep -qE "$MERGE_RE" <<<"$RAW" || exit 0
@@ -30,24 +35,25 @@ if ! command -v jq >/dev/null; then
   exit 2
 fi
 RAWCMD=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
-CMD=$(tr '\\\n' '  ' <<<"$RAWCMD")   # join continued lines
+CMD=${RAWCMD//$'\\\n'/}; CMD=${CMD//$'\n'/;}; CMD=${CMD//\\/ }   # join continued lines; a newline separates commands
 grep -qE "$MERGE_RE" <<<"$CMD" || exit 0
-grep -qE '(^|[[:space:];&|])SHIP_GATE=off[[:space:]]' <<<"$CMD" && exit 0
+grep -qE "(^|[;&|(])[[:space:]]*${ASSIGN}SHIP_GATE=off[[:space:]]+$ASSIGN$MERGE_CORE" <<<"$CMD" && exit 0   # only as a prefix of the merge itself
 deny() { jq -n --arg r "ship merge gate: $1 Prefix SHIP_GATE=off only for a merge that is not going through ship." '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'; exit 0; }
 UNREAD="the merge command has quoting this check cannot read; simplify it."
-[[ $RAWCMD == *\\[\"\']* ]] && deny "$UNREAD"
+T=${RAWCMD//\\\\/}; [[ $T == *\\[\"\']* ]] && deny "$UNREAD"   # an escaped quote (an odd run of backslashes)
 # CHK = CMD with each quoted --subject/-t/--body/-b value replaced by QUOTED; other quoted text stays readable
 CHK=""; R=$CMD; QRE="^([^\"']*)([\"'])(.*)$"
 while [[ $R =~ $QRE ]]; do
   CHK+=${BASH_REMATCH[1]}; q=${BASH_REMATCH[2]}; R=${BASH_REMATCH[3]}
   [[ $R == *"$q"* ]] || deny "$UNREAD"
   S=${R%%"$q"*}; R=${R#*"$q"}
-  if [[ $CHK =~ (^|[[:space:]])(--subject|-t|--body|-b)(=|[[:space:]]+)$ ]]; then CHK+=QUOTED
-  elif [[ $S =~ ^([0-9a-f]{40}|gh|pr|merge)$ ]]; then CHK+=$S
+  RUNS=""; [[ $q == '"' && ( $S == *'$('* || $S == *'`'* ) ]] && RUNS=1   # "$(...)" runs; keep it readable
+  if [[ -z $RUNS && ( $CHK =~ (^|[[:space:]])(--subject|-t|--body|-b)(=|[[:space:]]+)\$?$ || $S =~ ^(--subject|-t|--body|-b)= ) ]]; then CHK+=QUOTED
+  elif [[ $S =~ ^([0-9a-f]{40}|gh|pr|merge)$ ]]; then CHK=${CHK%\$}; CHK+=$S   # $'...' around a word is still that word
   else CHK+=$q$S$q; fi
 done
 CHK+=$R
-[ "$(grep -oE "pr$Q[[:space:]]+${Q}merge" <<<"$CHK" | wc -l)" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."
+[ "$(grep -oE '(^|[^[:alnum:]_-])merge([^[:alnum:]_-]|$)' <<<"$CHK" | wc -l)" -eq 1 ] || deny "more than one merge in one command. Run each merge as its own command."
 grep -q '#' <<<"$CHK" && deny "the merge command contains a # comment, which could hide a flag from this check. Run the merge without it."
 [ "$(grep -o -- '--match-head-commit' <<<"$CHK" | wc -l)" -le 1 ] || deny "more than one --match-head-commit. Pin exactly one commit."
 grep -q -- '--auto' <<<"$CHK" && deny "auto-merge can land a later commit that never passed the gates. Wait for the checks, then merge with --match-head-commit <sha>."
@@ -56,11 +62,14 @@ SHA=$(grep -oE -- '--match-head-commit[=[:space:]]+[0-9a-f]{40}' <<<"$CHK" | hea
 DIR=$(jq -r '.cwd // empty' <<<"$INPUT"); DIR=${DIR:-$PWD}
 # A first command `cd <literal path> &&` (or `;`) names the checkout instead of the session's.
 DQ="\"([^\"\$\`]*)\""; SQ="'([^'\$\`]*)'"; BARE="([^\"'[:space:];&|\$\`]+)"
-CD_RE="^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*cd[[:space:]]+($DQ|$SQ|$BARE)[[:space:]]*(&&|;)"
-if [[ $CMD =~ $CD_RE ]]; then
+CD_RE="^[[:space:]]*${ASSIGN}cd[[:space:]]+($DQ|$SQ|$BARE)[[:space:]]*(&&|;)"
+CD_ANY="^[[:space:]]*${ASSIGN}cd([[:space:];&]|\$)"
+if [[ $CMD =~ $CD_ANY ]]; then
+  [[ $CMD =~ $CD_RE ]] || deny "the cd target cannot be read by this check (a variable, substitution or ~user). Use an absolute path or ~/."
   P="${BASH_REMATCH[3]}${BASH_REMATCH[4]}${BASH_REMATCH[5]}"   # one of the three is set
   case "${BASH_REMATCH[5]}" in "~") P=$HOME ;; "~/"*) P=$HOME/${P#"~/"} ;; "~"*) P="" ;; esac   # bare ~ only; ~user is not read
-  [ -n "$P" ] && { [[ $P == /* ]] && DIR=$P || DIR=$DIR/$P; }
+  [ -n "$P" ] || deny "the cd target cannot be read by this check (~user or empty). Use an absolute path or ~/."
+  [[ $P == /* ]] && DIR=$P || DIR=$DIR/$P
 fi
 GD=$(git -C "$DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || deny "$DIR is not a git checkout, so no markers can be checked. Run the merge from the checkout the gates ran in."
 git -C "$DIR" cat-file -e "$SHA^{commit}" 2>/dev/null || deny "commit ${SHA:0:12} is not in $DIR. Run the merge from the checkout the gates ran in, or start the command with cd <that checkout> &&."

@@ -55,6 +55,29 @@ check deny  "gh pr merge 3 --squash --subject \"a \\\" b\" --match-head-commit $
 check deny  "gh pr merge 3 --squash --subject \"unclosed --match-head-commit $OLD"
 check deny  "gh pr merge 3 --squash --match-head-commit $OLD; sh -c \"gh pr merge 4\""
 check deny  "gh pr merge 3 --squash --match-head-commit $OLD \"--auto\""
+check deny  "gh pr merge 3 --squash --subject \"\$(gh pr merge 4 --squash)\" --match-head-commit $OLD"
+check deny  "gh pr merge 3 --squash --body \"\`gh pr merge 4\`\" --match-head-commit $OLD"
+check allow "gh pr merge 3 --squash --subject '\$(not run)' --match-head-commit $OLD"
+check deny  "gh pr merge -b -t \"\$(gh pr merge 4 --squash)\" --squash --match-head-commit $OLD"
+check allow "gh pr merge 3 --squash \"--subject=Fix #12\" --match-head-commit $OLD"
+check allow "gh pr merge 3 --squash --subject=\$'Fix #12' --match-head-commit $OLD"
+check allow "gh pr merge 3 --squash --match-head-commit \$'$OLD'"
+check allow "gh pr merge 3 --squash --subject \"path \\\\\" --match-head-commit $OLD"
+# merge detection and the bypass
+check deny  "gh pr --repo owner/repo merge 3 --squash"
+check deny  "gh pr -R owner/repo merge 3 --squash"
+check allow "gh pr --repo owner/repo merge 3 --squash --match-head-commit $OLD"
+check deny  "g\\
+h pr merge 3 --squash"
+check deny  "gh pr merge 3 --au\\
+to --squash --match-head-commit $OLD"
+check deny  "gh pr merge 3 --squash --subject \"say SHIP_GATE=off now\""
+check deny  "echo SHIP_GATE=off
+gh pr merge 3 --squash"
+check allow "SHIP_GATE=off gh pr --repo owner/repo merge 3"
+check allow "gh pr create --title \"merge gate fix\" --body x"
+check allow "gh pr view 5 --json mergeStateStatus"
+check deny  "cd \"\$PWD\" && gh pr merge 3 --squash --match-head-commit $OLD"
 # repo B, gated, merged from a session in repo A
 check allow "cd $T/b && gh pr merge 1 --squash --match-head-commit $SHB"
 check allow "cd \"$T/b c\" && gh pr merge 1 --squash --match-head-commit $SHB"
@@ -63,6 +86,8 @@ check allow "FOO=1 cd '../b c'; gh pr merge 1 --squash --match-head-commit $SHB"
 check deny  "gh pr merge 1 --squash --match-head-commit $SHB"
 check deny  "cd \$HOME/x && gh pr merge 1 --squash --match-head-commit $SHB"
 check deny  "git status && cd $T/b && gh pr merge 1 --squash --match-head-commit $SHB"
+check deny  "cd ~nobody/b && gh pr merge 3 --squash --match-head-commit $OLD"
+check deny  "cd \"\" && gh pr merge 3 --squash --match-head-commit $OLD"
 out=$(jq -n --arg c "gh pr merge 1 --squash --match-head-commit $SHB" --arg d "$PWD" '{tool_name:"Bash",cwd:$d,tool_input:{command:$c}}' | bash "$H")
 grep -q 'is not in' <<<"$out" && echo "ok   pin from another repo names 'is not in'" || { echo "FAIL pin from another repo: $out"; fail=1; }
 cd "$T" || exit 1   # not a git checkout

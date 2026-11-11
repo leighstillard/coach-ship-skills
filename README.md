@@ -22,7 +22,7 @@ Skills, agents and one hook that take a code change from "I have a task" to "mer
 10. **Merged or blocked honestly**: `babysit` watches checks, fixes failures, answers review and merges.
 11. **Cleaned up**: branch, worktrees, scratch files, follow-up issues.
 
-A code change after a gate passed reopens it. To make that stick, `simplify`, `verify` and the review step each write an empty marker file for the commit they passed on:
+A code change after a gate passed reopens it. To make that stick, `ship` writes an empty marker file for the commit each time `simplify`, `verify` or the review step passes on it. Running `simplify` or `verify` on its own writes nothing.
 
 ```
 $(git rev-parse --git-common-dir)/ship/<sha>.simplified
@@ -53,8 +53,8 @@ cd coach-ship-skills
 
 The installer copies the skills (and, for Claude, the command and agents) and the hook. If a skill directory of the same name already exists, it is moved to `skills-backup-<timestamp>/` rather than deleted. Then register the hook:
 
-- **Claude Code**: add the `PreToolUse` entry from `hooks/claude-settings.snippet.json` to `~/.claude/settings.json` and start a new session.
-- **Codex**: the installer writes `~/.codex/hooks.json` if you have none; otherwise merge `hooks/codex-hooks.json` into yours. Start Codex, run `/hooks` and trust the hook. Codex skips untrusted hooks.
+- **Claude Code**: add the `PreToolUse` entry from `hooks/claude-settings.snippet.json` to `$CLAUDE_HOME/settings.json` and start a new session. The snippet names `$HOME/.claude/hooks/ship-merge-gate.sh`; with a custom `CLAUDE_HOME`, use the path the installer prints.
+- **Codex**: the installer writes `$CODEX_HOME/hooks.json`, pointing at the installed hook, if you have none; otherwise merge `hooks/codex-hooks.json` into yours, with the command set to the path the installer prints. Start Codex, run `/hooks` and trust the hook. Codex skips untrusted hooks.
 
 To update, `git pull` and run the installer again.
 
