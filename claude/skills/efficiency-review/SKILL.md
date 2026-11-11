@@ -73,6 +73,8 @@ Before marking anything Critical or High:
 2. If a database is reachable, run `EXPLAIN (ANALYZE, BUFFERS)` on the new or changed query. Quote the plan node that matters.
 3. If neither is possible, downgrade to Medium and state what measurement would confirm it.
 
+Exception: a complexity-class regression against the code it replaces stays High without a measurement when the finding states both complexities, the lines that prove each, and why n is unbounded.
+
 Never fabricate numbers. Never cite a plan you did not run.
 
 ## 6. Severity → gate
